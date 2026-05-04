@@ -1,22 +1,12 @@
 {
-  "version": 2,
-  "functions": {
-    "api/leads.js": {
-      "runtime": "nodejs18.x"
-    }
-  },
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/leads",
-      "dest": "/api/leads.js"
+      "source": "/api/leads",
+      "destination": "/api/leads.js"
     },
     {
-      "src": "/api/leads/(.*)",
-      "dest": "/api/leads.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }
