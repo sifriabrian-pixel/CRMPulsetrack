@@ -11,6 +11,10 @@
       "dest": "/api/leads.js"
     },
     {
+      "src": "/api/leads/(.*)",
+      "dest": "/api/leads.js"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
