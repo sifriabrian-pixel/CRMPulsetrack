@@ -444,13 +444,7 @@ var curFilter = "all", selId = null, viewMode = "list";
 var sortField = null, sortAsc = true;
 var pendingStageChange = null;
 
-var leads = [
-  {id:1,nombre:"Valentina",apellido:"Rodríguez",email:"vale.rod@gmail.com",tel:"+54 11 5234-8901",propiedad:"Torre Palermo VII",stage:"Nuevo",fecha:"29/04/2026",notas:"",resp:{"¿Garantía propietaria?":"Sí, en CABA","¿Presupuesto mensual?":"USD 800-1.000","¿Cuántas personas?":"2 personas"}},
-  {id:2,nombre:"Matías",apellido:"Fernández",email:"mati@outlook.com",tel:"+54 9 351 402-7832",propiedad:"Torre Palermo VII",stage:"Contactado",fecha:"28/04/2026",notas:"Llamó el martes. Quiere 3er o 4to piso.",resp:{"¿Garantía propietaria?":"No tengo","¿Presupuesto mensual?":"Hasta USD 700","¿Cuántas personas?":"Solo yo"}},
-  {id:3,nombre:"Carolina",apellido:"Gómez",email:"caro@gmail.com",tel:"+54 11 6789-0123",propiedad:"Puerto Madero Suites",stage:"En proceso",fecha:"27/04/2026",notas:"Visita coordinada viernes 2/5 a las 15hs.",resp:{"¿Vivir o inversión?":"Inversión","¿Compra al contado?":"Sí","¿Plazo?":"30 días"}},
-  {id:4,nombre:"Agustín",apellido:"Morales",email:"agumorales@hotmail.com",tel:"+54 11 4523-6789",propiedad:"Nordelta Casa 12B",stage:"Nuevo",fecha:"27/04/2026",notas:"",resp:{"¿Vehículo propio?":"Sí","¿Trabaja remoto?":"100% remoto","¿Preaprobación hipotecaria?":"No, contado"}},
-  {id:5,nombre:"Lucía",apellido:"Pereyra",email:"luciap@gmail.com",tel:"+54 9 11 2345-6789",propiedad:"Puerto Madero Suites",stage:"Descartado",fecha:"25/04/2026",notas:"No califica: sin garantía ni contado.",resp:{"¿Vivir o inversión?":"Vivir","¿Compra al contado?":"No","¿Plazo?":"6 meses"}}
-];
+var leads = []; // Leads cargados desde Supabase
 
 // ─────────────────────────────────────────────
 // HELPERS
