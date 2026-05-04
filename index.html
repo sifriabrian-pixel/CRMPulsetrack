@@ -1065,9 +1065,8 @@ saveNotes = function(id){
   });
 };
 
-// Override updStatus to persist
-var _origUpdStatus = updStatus;
-updStatus = function(id,v){
+// Patch updStatus to also persist to Supabase
+var _updStatusOrig = function(id,v){
   var l=leads.find(function(x){return x.id===id;}); if(!l)return;
   l.stage=v;
   apiPatch(id,{stage:v});
