@@ -28,22 +28,45 @@ function supabaseRequest(method, path, body, env) {
   });
 }
 
+// Extract value from Meta field_data array
+// field_data: [{key: "full_name", values: ["John Doe"]}, ...]
+function extractFromFieldData(fieldData, keys) {
+  if (!Array.isArray(fieldData)) return '';
+  for (const key of keys) {
+    const field = fieldData.find(f =>
+      f.key && f.key.toLowerCase().replace(/\s/g,'_') === key.toLowerCase().replace(/\s/g,'_')
+    );
+    if (field && field.values && field.values[0]) return field.values[0];
+  }
+  return '';
+}
+
+// Build respuestas object from field_data
+function buildRespuestas(fieldData) {
+  if (!Array.isArray(fieldData)) return {};
+  const skip = ['full_name','email','phone_number','first_name','last_name','phone'];
+  const resp = {};
+  fieldData.forEach(f => {
+    if (!skip.includes((f.key||'').toLowerCase()) && f.values && f.values[0]) {
+      resp[f.key] = f.values[0];
+    }
+  });
+  return resp;
+}
+
 module.exports = async (req, res) => {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
   const env = {
     SUPABASE_URL: process.env.SUPABASE_URL,
     SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY
   };
 
-  // GET: obtener todos los leads
+  // GET: fetch all leads
   if (req.method === 'GET') {
     try {
       const result = await supabaseRequest('GET', '/leads?order=created_at.desc', null, env);
@@ -53,33 +76,60 @@ module.exports = async (req, res) => {
     }
   }
 
-  // POST: crear nuevo lead (viene desde Make/webhook)
+  // POST: create lead — supports both direct fields and Meta field_data format
   if (req.method === 'POST') {
     try {
       const body = req.body || {};
       const d = new Date();
       const fecha = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 
+      // Support Meta field_data format (array of {key, values})
+      const fieldData = body.field_data || [];
+      
+      // Try to get name from full_name or first_name + last_name
+      const fullName = extractFromFieldData(fieldData, ['full_name']) ||
+                       body.nombre || body.full_name || '';
+      const firstName = extractFromFieldData(fieldData, ['first_name']) || body.nombre || '';
+      const lastName  = extractFromFieldData(fieldData, ['last_name'])  || body.apellido || '';
+
+      const nombre   = fullName || firstName || '';
+      const apellido = fullName ? '' : lastName;
+      const email    = extractFromFieldData(fieldData, ['email']) || body.email || '';
+      const telefono = extractFromFieldData(fieldData, ['phone_number','phone']) || body.telefono || body.phone_number || '';
+      
+      // Propiedad: use form_name or ad_name from body
+      const propiedad = body.propiedad || body.form_name || body.ad_name || '';
+
+      // Build respuestas from remaining field_data fields
+      const respuestas = fieldData.length > 0
+        ? buildRespuestas(fieldData)
+        : (body.respuestas || {});
+
       const lead = {
-        nombre:     body.nombre     || body.first_name  || '',
-        apellido:   body.apellido   || body.last_name   || '',
-        email:      body.email      || '',
-        telefono:   body.telefono   || body.phone       || '',
-        propiedad:  body.propiedad  || body.property    || '',
-        stage:      body.stage      || 'Nuevo',
-        fecha:      body.fecha      || fecha,
-        notas:      '',
-        respuestas: body.respuestas || body.answers     || {}
+        nombre,
+        apellido,
+        email,
+        telefono,
+        propiedad,
+        stage: body.stage || 'Nuevo',
+        fecha: body.fecha || fecha,
+        notas: '',
+        respuestas
       };
+
+      // Log for debugging
+      console.log('Lead received:', JSON.stringify(body).slice(0, 500));
+      console.log('Lead parsed:', JSON.stringify(lead));
 
       const result = await supabaseRequest('POST', '/leads', lead, env);
       return res.status(201).json(result.data);
     } catch (err) {
+      console.error('Error:', err);
       return res.status(500).json({ error: err.message });
     }
   }
 
-  // PATCH: actualizar un lead (stage, notas)
+  // PATCH: update lead
   if (req.method === 'PATCH') {
     try {
       const { id, ...updates } = req.body || {};
