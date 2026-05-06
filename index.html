@@ -66,7 +66,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000517;}
 .th-row{display:grid;grid-template-columns:2fr 1.4fr 1fr .9fr 1fr 130px;padding:7px 18px;border-bottom:1px solid rgba(255,255,255,.06);background:#000a2e;flex-shrink:0;}
 .th{font-family:'Poppins',sans-serif;font-size:9px;font-weight:500;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.8px;cursor:pointer;user-select:none;}
 .th:hover{color:rgba(255,255,255,.6);}
-.leads-scroll{flex:1;overflow-y:auto;}
+.leads-scroll{flex:1;overflow-y:auto;min-height:0;}
 .lead-row{display:grid;grid-template-columns:2fr 1.4fr 1fr .9fr 1fr 130px;padding:9px 18px;border-bottom:1px solid rgba(255,255,255,.04);align-items:center;cursor:pointer;transition:background .12s;}
 .lead-row:hover{background:rgba(255,255,255,.025);}
 .lead-row.sel{background:rgba(35,47,197,.09);}
@@ -81,12 +81,12 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000517;}
 .wa-act{border-color:rgba(37,211,102,.3)!important;color:#25D366!important;}
 .wa-act:hover{background:rgba(37,211,102,.1)!important;}
 /* KANBAN */
-.kanban-wrap{flex:1;overflow-x:auto;overflow-y:hidden;padding:14px 18px;display:flex;gap:10px;}
-.kb-col{flex-shrink:0;width:215px;display:flex;flex-direction:column;}
+.kanban-wrap{flex:1;overflow-x:auto;overflow-y:hidden;padding:14px 18px;display:flex;gap:10px;align-items:flex-start;}
+.kb-col{flex-shrink:0;width:215px;display:flex;flex-direction:column;min-height:0;}
 .kb-hdr{padding:8px 11px;border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:space-between;}
 .kb-hdr-title{font-size:11px;font-weight:600;color:#fff;}
 .kb-hdr-cnt{font-family:'Poppins',sans-serif;font-size:9px;font-weight:600;padding:2px 7px;border-radius:10px;}
-.kb-cards{flex:1;overflow-y:auto;background:rgba(255,255,255,.015);border-radius:0 0 8px 8px;padding:6px;display:flex;flex-direction:column;gap:6px;min-height:180px;}
+.kb-cards{flex:1;overflow-y:auto;background:rgba(255,255,255,.015);border-radius:0 0 8px 8px;padding:6px;display:flex;flex-direction:column;gap:6px;min-height:180px;max-height:calc(100vh - 280px);}
 .kb-card{background:#0a0f2e;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:10px;cursor:pointer;transition:all .15s;}
 .kb-card:hover{border-color:rgba(35,47,197,.4);background:#0d1535;}
 .kb-card.sel{border-color:rgba(35,47,197,.6);background:#0d1535;}
