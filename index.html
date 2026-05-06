@@ -648,7 +648,7 @@ function renderList(){
     var hasNotes=l.notas&&l.notas.trim();
     var notesDot=hasNotes?'<span title="Tiene notas" style="color:#FFD43B;font-size:9px">&#9679;</span>':"";
     var waHref=waLink(l);
-    return '<div class="lead-row'+sel+'" onclick="openDetailPage('+l.id+')" style="cursor:pointer">'
+    return '<div class="lead-row'+sel+'" onclick="openDetailPage(this.dataset.lid)" data-lid="'+l.id+'" style="cursor:pointer">'
       +'<div style="display:flex;align-items:center;gap:8px">'+
         '<div class="av" style="background:'+c+'22;color:'+c+'">'+initials(l.nombre,l.apellido)+'</div>'+
         '<div><div class="ln">'+l.nombre+' '+l.apellido+notesDot+'</div><div class="le">'+l.email+'</div></div>'
@@ -679,8 +679,8 @@ function renderKanban(){
           return '<div class="kb-card'+sel+'" draggable="true" '+
             'data-id="'+l.id+'" '+
             'data-stage="'+s.name+'" '+
-            'onclick="openDetailPage('+l.id+')" '+
-            'ondragstart="kbDragStart(event,'+l.id+')" '+
+            'onclick="openDetailPage(this.dataset.lid)" data-lid="'+l.id+'" '+
+            'ondragstart="kbDragStart(event,this.dataset.lid)" '+
             'ondragend="kbDragEnd(event)">'+
             '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'+
               '<div class="av" style="width:22px;height:22px;font-size:8px;background:'+c+'22;color:'+c+'">'+initials(l.nombre,l.apellido)+'</div>'+
@@ -702,7 +702,7 @@ function renderKanban(){
         'data-stage="'+s.name+'" '+
         'ondragover="kbDragOver(event)" '+
         'ondragleave="kbDragLeave(event)" '+
-        'ondrop="kbDrop(event,this.dataset.stage)" '+
+        'ondrop="kbDrop(event)" '+
       '>'+cards+'</div>'+
     '</div>';
   }).join("");
@@ -711,7 +711,7 @@ function renderKanban(){
 // ── DRAG & DROP ──
 var draggedLeadId=null;
 function kbDragStart(e,id){
-  draggedLeadId=id;
+  draggedLeadId=id||e.currentTarget.dataset.lid;
   e.target.classList.add("dragging");
   e.dataTransfer.effectAllowed="move";
 }
@@ -727,10 +727,11 @@ function kbDragOver(e){
 function kbDragLeave(e){
   e.currentTarget.classList.remove("drag-over");
 }
-function kbDrop(e,newStage){
+function kbDrop(e){
   e.preventDefault();
+  var newStage=e.currentTarget.dataset.stage;
   e.currentTarget.classList.remove("drag-over");
-  if(!draggedLeadId) return;
+  if(!draggedLeadId||!newStage) return;
   var l=leads.find(function(x){return x.id===draggedLeadId;});
   if(!l||l.stage===newStage) return;
   // Check if dropping to last stage (confirm)
