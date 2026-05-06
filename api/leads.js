@@ -129,6 +129,29 @@ module.exports = async (req, res) => {
         }
       }
 
+      // Build respuestas from individual fields sent by Make
+      // Make sends respuesta_1, respuesta_2, respuesta_3 for each question
+      const respuestasFromFields = {};
+      const questionLabels = {
+        'respuesta_1': '¿Ya estás viendo propiedades para comprar activamente?',
+        'respuesta_2': '¿Cuál es tu situación de compra hoy?',
+        'respuesta_3': '¿Estás buscando comprar dentro de los próximos días/semanas?'
+      };
+      Object.entries(questionLabels).forEach(([key, label]) => {
+        if (body[key] && body[key].trim()) {
+          respuestasFromFields[label] = body[key];
+        }
+      });
+      // Also check for any other custom fields sent as resp_* or similar
+      Object.keys(body).forEach(k => {
+        if (k.startsWith('resp_') && body[k]) {
+          respuestasFromFields[k.replace('resp_','')] = body[k];
+        }
+      });
+      const finalRespuestas = Object.keys(respuestasFromFields).length > 0
+        ? respuestasFromFields
+        : respuestas;
+
       const lead = {
         nombre,
         apellido,
@@ -138,7 +161,7 @@ module.exports = async (req, res) => {
         stage: body.stage || 'Nuevo',
         fecha: body.fecha || fecha,
         notas: '',
-        respuestas
+        respuestas: finalRespuestas
       };
 
       const result = await supabaseRequest('POST', '/leads', lead, env);
