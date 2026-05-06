@@ -28,8 +28,6 @@ function supabaseRequest(method, path, body, env) {
   });
 }
 
-// Extract value from Meta field_data array
-// field_data: [{key: "full_name", values: ["John Doe"]}, ...]
 function extractFromFieldData(fieldData, keys) {
   if (!Array.isArray(fieldData)) return '';
   for (const key of keys) {
@@ -41,10 +39,9 @@ function extractFromFieldData(fieldData, keys) {
   return '';
 }
 
-// Build respuestas object from field_data
 function buildRespuestas(fieldData) {
   if (!Array.isArray(fieldData)) return {};
-  const skip = ['full_name','email','phone_number','first_name','last_name','phone'];
+  const skip = ['full_name','email','phone_number','first_name','last_name','phone','full name'];
   const resp = {};
   fieldData.forEach(f => {
     if (!skip.includes((f.key||'').toLowerCase()) && f.values && f.values[0]) {
@@ -76,34 +73,61 @@ module.exports = async (req, res) => {
     }
   }
 
-  // POST: create lead — supports both direct fields and Meta field_data format
+  // POST: create lead with duplicate check
   if (req.method === 'POST') {
     try {
       const body = req.body || {};
       const d = new Date();
       const fecha = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 
-      // Support Meta field_data format (array of {key, values})
       const fieldData = body.field_data || [];
-      
-      // Try to get name from full_name or first_name + last_name
-      const fullName = extractFromFieldData(fieldData, ['full_name']) ||
-                       body.nombre || body.full_name || '';
+
+      const fullName = extractFromFieldData(fieldData, ['full_name','full name']) || body.nombre || body.full_name || '';
       const firstName = extractFromFieldData(fieldData, ['first_name']) || body.nombre || '';
       const lastName  = extractFromFieldData(fieldData, ['last_name'])  || body.apellido || '';
 
       const nombre   = fullName || firstName || '';
       const apellido = fullName ? '' : lastName;
       const email    = extractFromFieldData(fieldData, ['email']) || body.email || '';
-      const telefono = extractFromFieldData(fieldData, ['phone_number','phone']) || body.telefono || body.phone_number || '';
-      
-      // Propiedad: use form_name or ad_name from body
-      const propiedad = body.propiedad || body.form_name || body.ad_name || '';
+      const telefono = extractFromFieldData(fieldData, ['phone_number','phone','phone number']) || body.telefono || body.phone_number || '';
+      const propiedad = body.propiedad || body.form_name || body.ad_name || body.adsetName || '';
 
-      // Build respuestas from remaining field_data fields
       const respuestas = fieldData.length > 0
         ? buildRespuestas(fieldData)
         : (body.respuestas || {});
+
+      // ── DUPLICATE CHECK ──
+      // Check by email first, then by nombre+telefono
+      if (email && email !== '(sin email)') {
+        const existing = await supabaseRequest(
+          'GET',
+          `/leads?email=eq.${encodeURIComponent(email)}&limit=1`,
+          null, env
+        );
+        if (existing.data && Array.isArray(existing.data) && existing.data.length > 0) {
+          console.log('Duplicate lead skipped (email):', email);
+          return res.status(200).json({ 
+            skipped: true, 
+            reason: 'duplicate', 
+            existing_id: existing.data[0].id 
+          });
+        }
+      } else if (nombre && telefono) {
+        // Fallback: check by nombre + telefono
+        const existing = await supabaseRequest(
+          'GET',
+          `/leads?nombre=eq.${encodeURIComponent(nombre)}&telefono=eq.${encodeURIComponent(telefono)}&limit=1`,
+          null, env
+        );
+        if (existing.data && Array.isArray(existing.data) && existing.data.length > 0) {
+          console.log('Duplicate lead skipped (nombre+tel):', nombre);
+          return res.status(200).json({ 
+            skipped: true, 
+            reason: 'duplicate', 
+            existing_id: existing.data[0].id 
+          });
+        }
+      }
 
       const lead = {
         nombre,
@@ -116,10 +140,6 @@ module.exports = async (req, res) => {
         notas: '',
         respuestas
       };
-
-      // Log for debugging
-      console.log('Lead received:', JSON.stringify(body).slice(0, 500));
-      console.log('Lead parsed:', JSON.stringify(lead));
 
       const result = await supabaseRequest('POST', '/leads', lead, env);
       return res.status(201).json(result.data);
