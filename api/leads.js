@@ -28,21 +28,15 @@ function supabaseRequest(method, path, body, env) {
   });
 }
 
-// Clean underscore values from Meta
-// "sí_lo_antes_posible" → "Sí, lo antes posible"
-// "cuento_con_el_presupuesto" → "Cuento con el presupuesto"
 function cleanMetaValue(v) {
   if (!v || typeof v !== 'string') return v;
-  return v
-    .replace(/_/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/^\w/, c => c.toUpperCase());
+  return v.replace(/_/g, ' ').replace(/\s+/g, ' ').trim()
+          .replace(/^\w/, c => c.toUpperCase());
 }
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
@@ -51,11 +45,27 @@ module.exports = async (req, res) => {
     SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY
   };
 
+  // Extract ID from URL path /api/leads/:id
+  const urlParts = (req.url || '').split('?')[0].split('/').filter(Boolean);
+  const leadId = urlParts.length > 2 ? urlParts[urlParts.length - 1] : null;
+
   // GET: fetch all leads
   if (req.method === 'GET') {
     try {
       const result = await supabaseRequest('GET', '/leads?order=created_at.desc', null, env);
       return res.status(200).json(result.data);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // DELETE: remove a lead
+  if (req.method === 'DELETE') {
+    try {
+      const id = leadId || (req.body && req.body.id);
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+      await supabaseRequest('DELETE', `/leads?id=eq.${id}`, null, env);
+      return res.status(200).json({ deleted: true, id });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -68,14 +78,12 @@ module.exports = async (req, res) => {
       const d = new Date();
       const fecha = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 
-      const nombre   = body.nombre   || '';
-      const apellido = body.apellido || '';
-      const email    = body.email    || '';
-      const telefono = body.telefono || '';
+      const nombre    = body.nombre   || '';
+      const apellido  = body.apellido || '';
+      const email     = body.email    || '';
+      const telefono  = body.telefono || '';
       const propiedad = body.propiedad || '';
 
-      // Build respuestas from respuesta_1/2/3 fields sent by Make
-      // Clean underscore values automatically
       const questionLabels = {
         'respuesta_1': '¿Ya estás viendo propiedades para comprar activamente?',
         'respuesta_2': '¿Cuál es tu situación de compra hoy?',
@@ -91,53 +99,39 @@ module.exports = async (req, res) => {
 
       // ── DUPLICATE CHECK ──
       if (email && email !== '(sin email)') {
-        const existing = await supabaseRequest(
-          'GET',
-          `/leads?email=eq.${encodeURIComponent(email)}&limit=1`,
-          null, env
-        );
+        const existing = await supabaseRequest('GET',
+          `/leads?email=eq.${encodeURIComponent(email)}&limit=1`, null, env);
         if (existing.data && Array.isArray(existing.data) && existing.data.length > 0) {
-          console.log('Duplicate skipped (email):', email);
           return res.status(200).json({ skipped: true, reason: 'duplicate' });
         }
       } else if (nombre && telefono) {
-        const existing = await supabaseRequest(
-          'GET',
-          `/leads?nombre=eq.${encodeURIComponent(nombre)}&telefono=eq.${encodeURIComponent(telefono)}&limit=1`,
-          null, env
-        );
+        const existing = await supabaseRequest('GET',
+          `/leads?nombre=eq.${encodeURIComponent(nombre)}&telefono=eq.${encodeURIComponent(telefono)}&limit=1`, null, env);
         if (existing.data && Array.isArray(existing.data) && existing.data.length > 0) {
-          console.log('Duplicate skipped (nombre+tel):', nombre);
           return res.status(200).json({ skipped: true, reason: 'duplicate' });
         }
       }
 
-      const lead = {
-        nombre,
-        apellido,
-        email,
-        telefono,
-        propiedad,
-        stage: body.stage || 'Nuevo',
-        fecha: body.fecha || fecha,
-        notas: '',
-        respuestas
-      };
+      const lead = { nombre, apellido, email, telefono, propiedad,
+        stage: body.stage || 'Nuevo', fecha, notas: '', respuestas };
 
-      console.log('Saving lead:', JSON.stringify(lead));
       const result = await supabaseRequest('POST', '/leads', lead, env);
       return res.status(201).json(result.data);
     } catch (err) {
-      console.error('Error:', err);
       return res.status(500).json({ error: err.message });
     }
   }
 
-  // PATCH: update lead
+  // PATCH: update lead (stage, notas, or full edit)
   if (req.method === 'PATCH') {
     try {
-      const { id, ...updates } = req.body || {};
+      const body = req.body || {};
+      const id = leadId || body.id;
       if (!id) return res.status(400).json({ error: 'id requerido' });
+      const { id: _id, ...updates } = body;
+      // Map frontend fields to DB columns
+      if (updates.tel) { updates.telefono = updates.tel; delete updates.tel; }
+      if (updates.resp) { updates.respuestas = updates.resp; delete updates.resp; }
       const result = await supabaseRequest('PATCH', `/leads?id=eq.${id}`, updates, env);
       return res.status(200).json(result.data);
     } catch (err) {
@@ -145,5 +139,5 @@ module.exports = async (req, res) => {
     }
   }
 
-  return res.status(405).json({ error: 'Método no permitido' });
+  return res.status(405).json({ error: 'Metodo no permitido' });
 };
