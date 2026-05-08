@@ -221,6 +221,19 @@ select,select option{color-scheme:dark;}
 select option{background:#0a0f2e!important;color:#fff!important;}
 ::-webkit-scrollbar{width:3px;height:3px;}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.09);border-radius:2px;}
+/* EDIT MODE */
+.ld-edit-inp{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;padding:7px 10px;color:#fff;font-family:'Poppins',sans-serif;font-size:11px;outline:none;transition:border-color .15s;color-scheme:dark;}
+.ld-edit-inp:focus{border-color:#232FC5;}
+.ld-edit-inp::placeholder{color:rgba(255,255,255,.2);}
+.btn-edit{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:7px;color:rgba(255,255,255,.6);font-family:'Lexend',sans-serif;font-size:10px;font-weight:500;padding:5px 11px;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:4px;}
+.btn-edit:hover{background:rgba(255,255,255,.12);color:#fff;}
+.btn-edit.active{background:rgba(35,47,197,.2);border-color:rgba(35,47,197,.4);color:#8B96FF;}
+.btn-del{background:rgba(226,75,74,.08);border:1px solid rgba(226,75,74,.2);border-radius:7px;color:#F0847F;font-family:'Lexend',sans-serif;font-size:10px;font-weight:500;padding:5px 11px;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:4px;}
+.btn-del:hover{background:rgba(226,75,74,.18);}
+.btn-save-edit{background:#232FC5;border:none;border-radius:7px;color:#fff;font-family:'Lexend',sans-serif;font-size:11px;font-weight:500;padding:8px 16px;cursor:pointer;transition:all .15s;}
+.btn-save-edit:hover{background:#1e28b0;}
+.btn-cancel-edit{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:7px;color:rgba(255,255,255,.6);font-family:'Lexend',sans-serif;font-size:11px;font-weight:500;padding:8px 16px;cursor:pointer;transition:all .15s;}
+.btn-cancel-edit:hover{background:rgba(255,255,255,.1);}
 /* DRAG & DROP */
 .kb-card.dragging{opacity:.4;transform:scale(.97);}
 .kb-cards.drag-over{background:rgba(35,47,197,.12);border:1px dashed rgba(35,47,197,.4);}
@@ -762,59 +775,160 @@ function switchView(v){
 function openDetailPage(id){
   curDetailId=id;
   var l=leads.find(function(x){return x.id===id;}); if(!l)return;
+  renderDetailPage(l, false);
+}
+
+function renderDetailPage(l, editMode){
+  var existing=document.getElementById("lead-detail-page");
+  if(existing) existing.remove();
   var c=avColor(l.id), sc=stageColor(l.stage);
   var stageOpts=stages.map(function(s){
     return '<option value="'+s.name+'"'+(l.stage===s.name?" selected":"")+'>'+s.name+'</option>';
   }).join("");
   var resp=Object.entries(l.resp||{}).map(function(e){
+    if(editMode){
+      return '<div class="ld-qa">'+
+        '<div class="ld-qq">'+e[0]+'</div>'+
+        '<input class="ld-edit-inp" data-resp-key="'+encodeURIComponent(e[0])+'" value="'+e[1]+'" style="margin-top:4px"/>'+
+      '</div>';
+    }
     return '<div class="ld-qa"><div class="ld-qq">'+e[0]+'</div><div class="ld-qa-a">'+e[1]+'</div></div>';
   }).join("")||'<div style="font-family:Poppins,sans-serif;font-size:11px;color:rgba(255,255,255,.25)">Sin respuestas registradas.</div>';
+
   var wl=waLink(l);
   var div=document.createElement("div");
   div.className="lead-detail-view";
   div.id="lead-detail-page";
+
+  var personalSection, propSection, actionBtns;
+
+  if(editMode){
+    personalSection='<div class="ld-card">'+
+      '<div class="ld-card-t">Datos personales</div>'+
+      '<div class="ld-field"><span class="ld-fk">Nombre</span><input class="ld-edit-inp" id="edit-nombre" value="'+(l.nombre||'')+'"/></div>'+
+      '<div class="ld-field"><span class="ld-fk">Apellido</span><input class="ld-edit-inp" id="edit-apellido" value="'+(l.apellido||'')+'"/></div>'+
+      '<div class="ld-field"><span class="ld-fk">Email</span><input class="ld-edit-inp" id="edit-email" value="'+(l.email||'')+'"/></div>'+
+      '<div class="ld-field"><span class="ld-fk">Telefono</span><input class="ld-edit-inp" id="edit-tel" value="'+(l.tel||'')+'"/></div>'+
+    '</div>';
+    propSection='<div class="ld-card">'+
+      '<div class="ld-card-t">Propiedad</div>'+
+      '<input class="ld-edit-inp" id="edit-prop" value="'+(l.propiedad||'')+'" style="margin-bottom:12px"/>'+
+      '<div class="ld-card-t" style="margin-top:8px">Etapa</div>'+
+      '<select class="ld-stage-sel" id="edit-stage">'+stageOpts+'</select>'+
+    '</div>';
+    actionBtns='<div style="display:flex;gap:8px;margin-bottom:20px">'+
+      '<button class="btn-save-edit" data-lid="'+l.id+'" onclick="saveEditLead(this.dataset.lid)">Guardar cambios</button>'+
+      '<button class="btn-cancel-edit" data-lid="'+l.id+'" onclick="cancelEdit(this.dataset.lid)">Cancelar</button>'+
+    '</div>';
+  } else {
+    personalSection='<div class="ld-card">'+
+      '<div class="ld-card-t">Datos personales</div>'+
+      '<div class="ld-field"><span class="ld-fk">Nombre</span><span class="ld-fv">'+l.nombre+' '+l.apellido+'</span></div>'+
+      '<div class="ld-field"><span class="ld-fk">Email</span><span class="ld-fv" style="color:#8B96FF">'+l.email+'</span></div>'+
+      '<div class="ld-field"><span class="ld-fk">Telefono</span><span class="ld-fv">'+l.tel+'</span></div>'+
+      '<div class="ld-field"><span class="ld-fk">Ingreso</span><span class="ld-fv">'+l.fecha+'</span></div>'+
+    '</div>';
+    propSection='<div class="ld-card">'+
+      '<div class="ld-card-t">Propiedad</div>'+
+      '<div style="font-size:13px;font-weight:600;color:#8B96FF;margin-bottom:12px">'+(l.propiedad||"--")+'</div>'+
+      '<div class="ld-card-t" style="margin-top:10px">Etapa del deal</div>'+
+      '<select class="ld-stage-sel" data-lid="'+l.id+'" onchange="updStatusDetail(this.dataset.lid,this.value)">'+stageOpts+'</select>'+
+      '<button class="ld-wa" data-href="'+wl+'" onclick="openWA(this)" style="margin-top:8px">Abrir WhatsApp</button>'+
+    '</div>';
+    actionBtns='<div style="display:flex;gap:8px;margin-bottom:20px">'+
+      '<button class="btn-edit" data-lid="'+l.id+'" onclick="startEdit(this.dataset.lid)">Editar lead</button>'+
+      '<button class="btn-del" data-lid="'+l.id+'" onclick="confirmDeleteLead(this.dataset.lid)">Eliminar lead</button>'+
+    '</div>';
+  }
+
   div.innerHTML=
     '<div class="lead-detail-topbar">'+
-      '<button class="back-btn" onclick="closeDetailPage()">← Volver a Leads</button>'+
+      '<button class="back-btn" onclick="closeDetailPage()">Volver a Leads</button>'+
       '<div style="display:flex;align-items:center;gap:10px;flex:1">'+
         '<div class="av-lg" style="background:'+c+'22;color:'+c+'">'+initials(l.nombre,l.apellido)+'</div>'+
         '<div>'+
           '<div style="font-size:16px;font-weight:600;color:#fff">'+l.nombre+' '+l.apellido+'</div>'+
-          '<div style="font-family:Poppins,sans-serif;font-size:11px;color:rgba(255,255,255,.4)">'+l.email+' · '+l.fecha+'</div>'+
+          '<div style="font-family:Poppins,sans-serif;font-size:11px;color:rgba(255,255,255,.4)">'+l.email+' - '+l.fecha+'</div>'+
         '</div>'+
         '<span class="pill" style="background:'+hexToRgba(sc,.18)+';color:'+sc+';margin-left:auto">'+l.stage+'</span>'+
       '</div>'+
     '</div>'+
     '<div style="flex:1;overflow-y:auto;padding:24px 32px">'+
-      '<div class="ld-grid">'+
-        '<div class="ld-card">'+
-          '<div class="ld-card-t">Datos personales</div>'+
-          '<div class="ld-field"><span class="ld-fk">Nombre</span><span class="ld-fv">'+l.nombre+' '+l.apellido+'</span></div>'+
-          '<div class="ld-field"><span class="ld-fk">Email</span><span class="ld-fv" style="color:#8B96FF">'+l.email+'</span></div>'+
-          '<div class="ld-field"><span class="ld-fk">Teléfono</span><span class="ld-fv">'+l.tel+'</span></div>'+
-          '<div class="ld-field"><span class="ld-fk">Ingreso</span><span class="ld-fv">'+l.fecha+'</span></div>'+
-        '</div>'+
-        '<div class="ld-card">'+
-          '<div class="ld-card-t">Propiedad</div>'+
-          '<div style="font-size:13px;font-weight:600;color:#8B96FF;margin-bottom:12px">'+(l.propiedad||"—")+'</div>'+
-          '<div class="ld-card-t" style="margin-top:10px">Etapa del deal</div>'+
-          '<select class="ld-stage-sel" data-lid="'+l.id+'" onchange="updStatusDetail(this.dataset.lid,this.value)">'+stageOpts+'</select>'+
-          '<button class="ld-wa" onclick="window.open(this.dataset.href,\'_blank\')" data-href="'+wl+'">Abrir WhatsApp</button>'+
-        '</div>'+
-      '</div>'+
+      actionBtns+
+      '<div class="ld-grid">'+personalSection+propSection+'</div>'+
       '<div class="ld-card-full">'+
         '<div class="ld-card-t">Respuestas del formulario</div>'+
         resp+
       '</div>'+
       '<div class="ld-card-full">'+
-        '<div class="ld-card-t">Notas internas <span id="ld-saved-ok" class="ld-saved">✓ Guardado</span></div>'+
-        '<textarea class="ld-notes-ta" id="ld-notes-ta" placeholder="Observaciones, recordatorios, llamadas...">'+(l.notas||"")+'</textarea>'+
-        '<button class="ld-save-btn" onclick="saveNotesDetail(this.dataset.lid)" data-lid="'+l.id+'">Guardar notas</button>'+
+        '<div class="ld-card-t">Notas internas <span id="ld-saved-ok" class="ld-saved">Guardado</span></div>'+
+        '<textarea class="ld-notes-ta" id="ld-notes-ta" placeholder="Observaciones...">'+(l.notas||"")+'</textarea>'+
+        '<button class="ld-save-btn" data-lid="'+l.id+'" onclick="saveNotesDetail(this.dataset.lid)">Guardar notas</button>'+
       '</div>'+
     '</div>';
   document.body.appendChild(div);
 }
+function saveEditLead(id){
+  var l=leads.find(function(x){return x.id===id;}); if(!l)return;
+  var nombre=document.getElementById("edit-nombre");
+  var apellido=document.getElementById("edit-apellido");
+  var email=document.getElementById("edit-email");
+  var tel=document.getElementById("edit-tel");
+  var prop=document.getElementById("edit-prop");
+  var stage=document.getElementById("edit-stage");
+  if(nombre) l.nombre=nombre.value.trim();
+  if(apellido) l.apellido=apellido.value.trim();
+  if(email) l.email=email.value.trim();
+  if(tel) l.tel=tel.value.trim();
+  if(prop) l.propiedad=prop.value.trim();
+  if(stage) l.stage=stage.value;
+  // Update respuestas
+  var respInputs=document.querySelectorAll("[data-resp-key]");
+  var newResp={};
+  respInputs.forEach(function(inp){
+    var key=decodeURIComponent(inp.dataset.respKey);
+    if(inp.value.trim()) newResp[key]=inp.value.trim();
+  });
+  if(Object.keys(newResp).length>0) l.resp=newResp;
+  // Save to API
+  var updates={
+    nombre:l.nombre,
+    apellido:l.apellido,
+    email:l.email,
+    telefono:l.tel,
+    propiedad:l.propiedad,
+    stage:l.stage,
+    respuestas:l.resp||{}
+  };
+  apiPatch(id, updates).then(function(){
+    renderDetailPage(l, false);
+    renderAll();
+  });
+}
 
+function confirmDeleteLead(id){
+  var l=leads.find(function(x){return x.id===id;}); if(!l)return;
+  if(!confirm("¿Eliminar el lead de "+l.nombre+" "+l.apellido+"? Esta acción no se puede deshacer.")) return;
+  deleteLead(id);
+}
+
+function deleteLead(id){
+  fetch('/api/leads/'+id,{method:'DELETE'})
+    .then(function(){
+      leads=leads.filter(function(x){return x.id!==id;});
+      closeDetailPage();
+      renderAll();
+    })
+    .catch(function(){
+      // If DELETE endpoint not available, just remove locally
+      leads=leads.filter(function(x){return x.id!==id;});
+      closeDetailPage();
+      renderAll();
+    });
+}
+function openWA(el){ window.open(el.dataset.href, '_blank'); }
+function startEdit(id){ var l=leads.find(function(x){return x.id===id;}); if(l) renderDetailPage(l,true); }
+function cancelEdit(id){ var l=leads.find(function(x){return x.id===id;}); if(l) renderDetailPage(l,false); }
 function closeDetailPage(){
   var el=document.getElementById("lead-detail-page");
   if(el) el.remove();
