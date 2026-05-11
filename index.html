@@ -1166,8 +1166,13 @@ var editingColorIdx=null;
 
 function renderStagesList(){
   var html=stages.map(function(s,i){
-    return '<div class="stage-row" id="stage-row-'+i+'">'+
-      '<span class="stage-drag">&#8942;</span>'+
+    return '<div class="stage-row" id="stage-row-'+i+'" draggable="true" '+
+      'ondragstart="stageDragStart(event,'+i+')" '+
+      'ondragover="stageDragOver(event)" '+
+      'ondragleave="stageDragLeave(event)" '+
+      'ondrop="stageDrop(event,'+i+')" '+
+      'ondragend="stageDragEnd(event)">'+
+      '<span class="stage-drag" style="cursor:grab;font-size:16px;color:rgba(255,255,255,.3)">&#8942;</span>'+
       '<div class="stage-color-dot" style="background:'+s.color+'" onclick="openColorPicker('+i+')"></div>'+
       '<input class="stage-name-inp" value="'+s.name+'" id="stage-inp-'+i+'" placeholder="Nombre de la etapa"/>'+
       '<button class="stage-del-btn" onclick="deleteStage('+i+')" title="Eliminar">&#x2715;</button>'+
@@ -1185,6 +1190,49 @@ function renderStagesList(){
       '<div class="color-picker-row">'+dots+'</div></div>';
   }
   document.getElementById("stages-list").innerHTML=html;
+}
+
+// ── STAGE DRAG & DROP ──
+var dragStageIdx=null;
+
+function stageDragStart(e, idx){
+  dragStageIdx=idx;
+  e.currentTarget.style.opacity="0.4";
+  e.dataTransfer.effectAllowed="move";
+}
+function stageDragEnd(e){
+  e.currentTarget.style.opacity="1";
+  document.querySelectorAll(".stage-row").forEach(function(el){
+    el.style.background="";
+    el.style.borderColor="";
+  });
+}
+function stageDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect="move";
+  e.currentTarget.style.background="rgba(35,47,197,.15)";
+  e.currentTarget.style.borderColor="rgba(35,47,197,.4)";
+}
+function stageDragLeave(e){
+  e.currentTarget.style.background="";
+  e.currentTarget.style.borderColor="";
+}
+function stageDrop(e, targetIdx){
+  e.preventDefault();
+  e.currentTarget.style.background="";
+  e.currentTarget.style.borderColor="";
+  if(dragStageIdx===null||dragStageIdx===targetIdx) return;
+  // Save current names from inputs before reordering
+  stages.forEach(function(s,i){
+    var inp=document.getElementById("stage-inp-"+i);
+    if(inp&&inp.value.trim()) s.name=inp.value.trim();
+  });
+  // Reorder
+  var moved=stages.splice(dragStageIdx,1)[0];
+  stages.splice(targetIdx,0,moved);
+  dragStageIdx=null;
+  editingColorIdx=null;
+  renderStagesList();
 }
 function openColorPicker(i){
   editingColorIdx=(editingColorIdx===i?null:i);
