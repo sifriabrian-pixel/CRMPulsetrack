@@ -1372,7 +1372,7 @@ function loadLeads(){
           nombre: l.nombre||'',
           apellido: l.apellido||'',
           email: l.email||'',
-          tel: l.telefono||'',
+          tel: l.telefono||l.tel||'',
           propiedad: l.propiedad||'',
           stage: l.stage||stages[0].name,
           fecha: l.fecha||'',
