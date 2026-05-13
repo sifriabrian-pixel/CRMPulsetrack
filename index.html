@@ -81,7 +81,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000517;}
 .wa-act{border-color:rgba(37,211,102,.3)!important;color:#25D366!important;}
 .wa-act:hover{background:rgba(37,211,102,.1)!important;}
 /* KANBAN */
-.kanban-wrap{flex:1;overflow-x:scroll;overflow-y:hidden;padding:14px 18px 18px;display:flex;flex-wrap:nowrap;gap:12px;align-items:flex-start;min-height:0;-webkit-overflow-scrolling:touch;}
+.kanban-wrap{flex:1;overflow-x:auto;overflow-y:hidden;padding:14px 18px 20px;display:flex;flex-wrap:nowrap;gap:12px;align-items:flex-start;width:100%;box-sizing:border-box;}
 .kb-col{flex:0 0 230px;width:230px;display:flex;flex-direction:column;height:calc(100vh - 240px);}
 .kb-hdr{padding:8px 11px;border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:space-between;}
 .kb-hdr-title{font-size:11px;font-weight:600;color:#fff;}
@@ -342,7 +342,7 @@ select option{background:#0a0f2e!important;color:#fff!important;}
       <div class="leads-scroll" id="leadlist"></div>
     </div>
     <!-- KANBAN -->
-    <div id="kanban-view" style="flex:1;display:none;overflow:hidden;min-height:0;position:relative;">
+    <div id="kanban-view" style="flex:1;display:none;flex-direction:column;min-height:0;">
       <div class="kanban-wrap" id="kanban-wrap"></div>
     </div>
   </div>
@@ -768,7 +768,7 @@ function kbDrop(e){
 function switchView(v){
   viewMode=v;
   document.getElementById("list-view").style.display=v==="list"?"flex":"none";
-  document.getElementById("kanban-view").style.display=v==="kanban"?"block":"none";
+  document.getElementById("kanban-view").style.display=v==="kanban"?"flex":"none";
   document.getElementById("vt-list").classList.toggle("active",v==="list");
   document.getElementById("vt-kanban").classList.toggle("active",v==="kanban");
   if(v==="kanban") renderKanban(); else renderList();
