@@ -316,6 +316,7 @@ select option{background:#0a0f2e!important;color:#fff!important;}
     <span class="badge-crm">CRM Inmobiliario</span>
   </div>
   <div style="display:flex;align-items:center;gap:14px">
+    <span id="view-scope-wrap"></span>
     <span style="font-family:'Poppins',sans-serif;font-size:9px;color:rgba(255,255,255,.25)">Meta Lead Ads · WhatsApp Ready</span>
     <button class="btn btn-ghost" style="padding:5px 10px;font-size:10px" onclick="doLogout()">Salir</button>
   </div>
@@ -532,6 +533,9 @@ var calUrl  = localStorage.getItem('pt_cal_url') || '';
 var AVCOLORS = ["#232FC5","#1D9E75","#9E341D","#7C1D9E","#9E8E1D","#C56B23"];
 var curFilter = "all", selId = null, viewMode = "list", dateFilter = "all", curDetailId = null;
 var sortField = null, sortAsc = true;
+var currentMember = null; // {id, client_id, role, nombre}
+var agencyMembers = []; // asesores + gerente de la inmobiliaria (solo se llena para gerente)
+var viewScope = "team"; // "team" o el id de un asesor
 var pendingStageChange = null;
 
 var leads = []; // Leads cargados desde Supabase
@@ -625,6 +629,9 @@ function setDateFilter(f){ dateFilter=f; renderAll(); }
 function getFiltered(){
   var q=(document.getElementById("srch")||{}).value||"";
   var r=leads.slice();
+  if(currentMember && currentMember.role==="gerente" && viewScope && viewScope!=="team"){
+    r=r.filter(function(l){return l.assigned_to===viewScope;});
+  }
   if(curFilter!=="all") r=r.filter(function(l){return l.stage===curFilter;});
   // Date filter
   if(dateFilter!=="all"){
@@ -870,11 +877,21 @@ function renderDetailPage(l, editMode){
       '<div class="ld-field"><span class="ld-fk">Telefono</span><span class="ld-fv">'+l.tel+'</span></div>'+
       '<div class="ld-field"><span class="ld-fk">Ingreso</span><span class="ld-fv">'+l.fecha+'</span></div>'+
     '</div>';
+    var assignSection='';
+    if(currentMember && currentMember.role==="gerente"){
+      var asesorOpts='<option value="">Sin asignar</option>'+
+        agencyMembers.filter(function(m){return m.role==="asesor";}).map(function(m){
+          return '<option value="'+m.id+'"'+(l.assigned_to===m.id?' selected':'')+'>'+m.nombre+'</option>';
+        }).join("");
+      assignSection='<div class="ld-card-t" style="margin-top:10px">Asignado a</div>'+
+        '<select class="ld-stage-sel" data-lid="'+l.id+'" onchange="reassignLead(this.dataset.lid,this.value)">'+asesorOpts+'</select>';
+    }
     propSection='<div class="ld-card">'+
       '<div class="ld-card-t">Propiedad</div>'+
       '<div style="font-size:13px;font-weight:600;color:#8B96FF;margin-bottom:12px">'+(l.propiedad||"--")+'</div>'+
       '<div class="ld-card-t" style="margin-top:10px">Etapa del deal</div>'+
       '<select class="ld-stage-sel" data-lid="'+l.id+'" onchange="updStatusDetail(this.dataset.lid,this.value)">'+stageOpts+'</select>'+
+      assignSection+
       '<button class="ld-wa" data-href="'+wl+'" onclick="openWA(this)" style="margin-top:8px">Abrir WhatsApp</button>'+
     '</div>';
     actionBtns='<div style="display:flex;gap:8px;margin-bottom:20px">'+
@@ -985,6 +1002,12 @@ function updStatusDetail(id,v){
   // update pill in header
   var pill=document.querySelector(".lead-detail-topbar .pill");
   if(pill){pill.textContent=v;var sc=stageColor(v);pill.style.background=hexToRgba(sc,.18);pill.style.color=sc;}
+  renderAll();
+}
+function reassignLead(id, memberId){
+  var l=leads.find(function(x){return x.id===id;}); if(!l)return;
+  l.assigned_to = memberId || null;
+  apiPatch(id,{assigned_to: memberId || null});
   renderAll();
 }
 
@@ -1396,6 +1419,40 @@ function authHeaders(){
   return h;
 }
 
+function decodeJwtSub(token){
+  try {
+    var payload = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    return payload.sub;
+  } catch(e){ return null; }
+}
+
+// Quién sos vos: tu fila en members (rol, nombre, a qué inmobiliaria pertenecés).
+function loadCurrentMember(){
+  var s = getSession();
+  if(!s || !s.access_token){ currentMember=null; return Promise.resolve(null); }
+  var uid = decodeJwtSub(s.access_token);
+  if(!uid){ currentMember=null; return Promise.resolve(null); }
+  return fetch(SUPABASE_URL+'/rest/v1/members?select=id,client_id,role,nombre&auth_user_id=eq.'+uid, {
+    headers: {'apikey':SUPABASE_ANON_KEY, 'Authorization':'Bearer '+s.access_token}
+  }).then(function(r){return r.json();}).then(function(rows){
+    currentMember = (rows && rows[0]) || null;
+    return currentMember;
+  }).catch(function(){ currentMember=null; return null; });
+}
+
+// Compañeros de la misma inmobiliaria (solo hace falta para el gerente:
+// selector de vista y combo "asignar a").
+function fetchAgencyMembers(){
+  if(!currentMember || currentMember.role!=="gerente"){ agencyMembers=[]; return Promise.resolve([]); }
+  var s = getSession();
+  return fetch(SUPABASE_URL+'/rest/v1/members?select=id,nombre,role&order=nombre.asc', {
+    headers: {'apikey':SUPABASE_ANON_KEY, 'Authorization':'Bearer '+(s&&s.access_token||SUPABASE_ANON_KEY)}
+  }).then(function(r){return r.json();}).then(function(rows){
+    agencyMembers = Array.isArray(rows) ? rows : [];
+    return agencyMembers;
+  }).catch(function(){ agencyMembers=[]; return []; });
+}
+
 function showLogin(){
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app-root').style.display='none';
@@ -1403,6 +1460,26 @@ function showLogin(){
 function showApp(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app-root').style.display='flex';
+  renderViewScopeSelector();
+}
+
+// Selector "Equipo / <asesor>" en la topbar, solo visible para gerente.
+function renderViewScopeSelector(){
+  var wrap=document.getElementById('view-scope-wrap');
+  if(!wrap) return;
+  if(!currentMember || currentMember.role!=="gerente" || !agencyMembers.filter(function(m){return m.role==="asesor";}).length){
+    wrap.innerHTML='';
+    return;
+  }
+  var opts='<option value="team"'+(viewScope==="team"?" selected":"")+'>Equipo (todos)</option>'+
+    agencyMembers.filter(function(m){return m.role==="asesor";}).map(function(m){
+      return '<option value="'+m.id+'"'+(viewScope===m.id?" selected":"")+'>'+m.nombre+'</option>';
+    }).join("");
+  wrap.innerHTML='<select class="view-toggle" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:7px;padding:5px 8px;color:#fff;font-family:Poppins,sans-serif;font-size:10px;color-scheme:dark" onchange="setViewScope(this.value)">'+opts+'</select>';
+}
+function setViewScope(v){
+  viewScope=v;
+  renderAll();
 }
 
 function doLogin(){
@@ -1421,8 +1498,10 @@ function doLogin(){
     btn.disabled=false; btn.textContent='Entrar';
     if(data && data.access_token){
       saveSession({access_token:data.access_token, refresh_token:data.refresh_token});
-      showApp();
-      loadLeads();
+      loadCurrentMember().then(fetchAgencyMembers).then(function(){
+        showApp();
+        loadLeads();
+      });
     } else {
       err.textContent='Email o clave incorrectos.';
       err.style.display='block';
@@ -1436,6 +1515,9 @@ function doLogin(){
 
 function doLogout(){
   clearSession();
+  currentMember = null;
+  agencyMembers = [];
+  viewScope = "team";
   showLogin();
 }
 
@@ -1485,7 +1567,8 @@ function loadLeads(){
           stage: l.stage||stages[0].name,
           fecha: l.fecha||'',
           notas: l.notas||'',
-          resp: l.respuestas||{}
+          resp: l.respuestas||{},
+          assigned_to: l.assigned_to||null
         };
       });
     }
@@ -1558,8 +1641,10 @@ document.getElementById('login-pass').addEventListener('keydown', function(e){
 });
 
 if(getSession()){
-  showApp();
-  loadLeads();
+  loadCurrentMember().then(fetchAgencyMembers).then(function(){
+    showApp();
+    loadLeads();
+  });
 } else {
   showLogin();
 }
