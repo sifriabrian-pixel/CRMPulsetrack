@@ -1,4 +1,4 @@
-const { supabaseRequest, buildLeadFromBody, findDuplicateLead } = require('./_lib/leadHelpers');
+const { supabaseRequest, buildLeadFromBody, findExistingLead, mergeLeadUpdates } = require('./_lib/leadHelpers');
 
 // Server-to-server ingest endpoint (Meta Ads via Make.com, future WhatsApp bots, etc).
 // No browser session exists here, so it authenticates via a per-client static
@@ -32,8 +32,18 @@ module.exports = async (req, res) => {
     const body = req.body || {};
     const lead = buildLeadFromBody(body);
 
-    if (await findDuplicateLead(lead, env, serviceKey, client.id)) {
-      return res.status(200).json({ skipped: true, reason: 'duplicate' });
+    // Un bot de WhatsApp puede mandar el mismo contacto varias veces a medida
+    // que la conversación avanza (primero nombre+telefono, despues las
+    // respuestas de calificacion). Si ya existe, se completa en vez de crear
+    // un lead duplicado o descartar la info nueva.
+    const existing = await findExistingLead(lead, env, serviceKey, client.id);
+    if (existing) {
+      const updates = mergeLeadUpdates(existing, lead);
+      if (Object.keys(updates).length === 0) {
+        return res.status(200).json({ updated: false, id: existing.id });
+      }
+      const result = await supabaseRequest('PATCH', `/leads?id=eq.${existing.id}`, updates, env, serviceKey);
+      return res.status(200).json({ updated: true, id: existing.id, data: result.data });
     }
 
     lead.client_id = client.id;

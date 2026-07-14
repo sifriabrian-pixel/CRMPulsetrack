@@ -75,4 +75,39 @@ async function findDuplicateLead(lead, env, authToken, clientId) {
   return false;
 }
 
-module.exports = { supabaseRequest, cleanMetaValue, buildLeadFromBody, findDuplicateLead };
+// Busca un lead ya cargado para el mismo contacto (usado por el webhook, donde
+// un bot de WhatsApp puede mandar el mismo contacto varias veces a medida que
+// la conversación avanza). El teléfono es la clave más confiable para leads
+// de WhatsApp -- el nombre/email pueden llegar vacíos en el primer mensaje.
+async function findExistingLead(lead, env, authToken, clientId) {
+  const clientFilter = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '';
+  if (lead.telefono) {
+    const byPhone = await supabaseRequest('GET',
+      `/leads?telefono=eq.${encodeURIComponent(lead.telefono)}${clientFilter}&limit=1`, null, env, authToken);
+    if (byPhone.data && Array.isArray(byPhone.data) && byPhone.data.length > 0) return byPhone.data[0];
+  }
+  if (lead.email && lead.email !== '(sin email)') {
+    const byEmail = await supabaseRequest('GET',
+      `/leads?email=eq.${encodeURIComponent(lead.email)}${clientFilter}&limit=1`, null, env, authToken);
+    if (byEmail.data && Array.isArray(byEmail.data) && byEmail.data.length > 0) return byEmail.data[0];
+  }
+  return null;
+}
+
+// Combina un lead nuevo (datos parciales de una conversación en curso) con uno
+// ya cargado: completa campos que estaban vacíos y suma nuevas respuestas del
+// formulario, sin pisar la etapa/notas que ya haya tocado el equipo a mano.
+function mergeLeadUpdates(existing, incoming) {
+  const updates = {};
+  ['nombre', 'apellido', 'email', 'propiedad'].forEach((field) => {
+    if (!existing[field] && incoming[field]) updates[field] = incoming[field];
+  });
+  const mergedRespuestas = Object.assign({}, existing.respuestas || {}, incoming.respuestas || {});
+  if (Object.keys(mergedRespuestas).length !== Object.keys(existing.respuestas || {}).length ||
+      JSON.stringify(mergedRespuestas) !== JSON.stringify(existing.respuestas || {})) {
+    updates.respuestas = mergedRespuestas;
+  }
+  return updates;
+}
+
+module.exports = { supabaseRequest, cleanMetaValue, buildLeadFromBody, findDuplicateLead, findExistingLead, mergeLeadUpdates };
