@@ -1,4 +1,5 @@
 const { supabaseRequest, buildLeadFromBody, findDuplicateLead } = require('./_lib/leadHelpers');
+const { notifyAssignment } = require('./_lib/notify');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -69,7 +70,18 @@ module.exports = async (req, res) => {
       // Map frontend fields to DB columns
       if (updates.tel) { updates.telefono = updates.tel; delete updates.tel; }
       if (updates.resp) { updates.respuestas = updates.resp; delete updates.resp; }
+      const isAssignment = Object.prototype.hasOwnProperty.call(updates, 'assigned_to');
       const result = await supabaseRequest('PATCH', `/leads?id=eq.${id}`, updates, env, authToken);
+
+      if (isAssignment && updates.assigned_to) {
+        try {
+          const leadRes = await supabaseRequest('GET',
+            `/leads?id=eq.${id}&select=nombre,apellido,propiedad&limit=1`, null, env, authToken);
+          const lead = leadRes.data && leadRes.data[0];
+          await notifyAssignment(updates.assigned_to, lead, env, authToken);
+        } catch (notifyErr) { /* el email nunca debe romper la asignacion */ }
+      }
+
       return res.status(200).json(result.data);
     } catch (err) {
       return res.status(500).json({ error: err.message });
