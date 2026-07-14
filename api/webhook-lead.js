@@ -27,7 +27,12 @@ module.exports = async (req, res) => {
     const clientLookup = await supabaseRequest('GET',
       `/clients?webhook_token=eq.${encodeURIComponent(token)}&select=id&limit=1`, null, env, serviceKey);
     const client = Array.isArray(clientLookup.data) && clientLookup.data[0];
-    if (!client) return res.status(401).json({ error: 'token invalido' });
+    if (!client) {
+      return res.status(401).json({
+        error: 'token invalido',
+        debug: { hasServiceKey: !!serviceKey }
+      });
+    }
 
     const body = req.body || {};
     const lead = buildLeadFromBody(body);
