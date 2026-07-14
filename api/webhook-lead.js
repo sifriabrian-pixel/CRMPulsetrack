@@ -13,11 +13,14 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: 'Metodo no permitido' });
   }
 
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // La clave de servicio nueva de Supabase (sb_secret_...) no es un JWT como
+  // la vieja service_role, asi que tiene que ir tambien como "apikey" (no
+  // alcanza con mandarla solo como Authorization Bearer).
   const env = {
     SUPABASE_URL: process.env.SUPABASE_URL,
-    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY
+    SUPABASE_ANON_KEY: serviceKey || process.env.SUPABASE_ANON_KEY
   };
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   const urlParts = (req.url || '').split('?')[0].split('/').filter(Boolean);
   const token = urlParts[urlParts.length - 1];
@@ -27,12 +30,7 @@ module.exports = async (req, res) => {
     const clientLookup = await supabaseRequest('GET',
       `/clients?webhook_token=eq.${encodeURIComponent(token)}&select=id&limit=1`, null, env, serviceKey);
     const client = Array.isArray(clientLookup.data) && clientLookup.data[0];
-    if (!client) {
-      return res.status(401).json({
-        error: 'token invalido',
-        debug: { hasServiceKey: !!serviceKey }
-      });
-    }
+    if (!client) return res.status(401).json({ error: 'token invalido' });
 
     const body = req.body || {};
     const lead = buildLeadFromBody(body);
