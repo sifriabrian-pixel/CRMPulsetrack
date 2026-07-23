@@ -336,6 +336,7 @@ select option{background:#0a0f2e!important;color:#fff!important;}
       <div class="nav-item" id="nav-dashboard" onclick="showView('dashboard')"><div class="nav-dot"></div>Dashboard</div>
       <div class="nav-item active" id="nav-leads" onclick="showView('leads')"><div class="nav-dot"></div>Leads<span class="nav-count" id="nc">5</span></div>
       <div class="nav-item" id="nav-calendar" onclick="showView('calendar')"><div class="nav-dot"></div>Calendario</div>
+      <div class="nav-item" id="nav-equipo" onclick="showView('equipo')" style="display:none"><div class="nav-dot"></div>Equipo</div>
       <div class="nav-item" id="nav-webhook" onclick="showView('webhook')"><div class="nav-dot"></div>Webhook Meta</div>
       <div class="nav-label">Config</div>
       <div class="nav-item" id="nav-settings" onclick="showView('settings')"><div class="nav-dot"></div>Ajustes</div>
@@ -458,6 +459,15 @@ select option{background:#0a0f2e!important;color:#fff!important;}
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- EQUIPO -->
+  <div class="main" id="view-equipo" style="display:none">
+    <div class="dash-scroll">
+      <div class="t-title" style="margin-bottom:4px">Equipo</div>
+      <div style="font-family:'Poppins',sans-serif;font-size:11px;color:rgba(255,255,255,.4);margin-bottom:18px">Cómo viene cada asesor con sus leads asignados</div>
+      <div id="equipo-content"></div>
     </div>
   </div>
 
@@ -1006,7 +1016,7 @@ function confirmDeleteLead(id){
 }
 
 function deleteLead(id){
-  fetch('/api/leads/'+id,{method:'DELETE',headers:authHeaders()})
+  authFetch('/api/leads/'+id,{method:'DELETE'})
     .then(function(){
       leads=leads.filter(function(x){return x.id!==id;});
       closeDetailPage();
@@ -1171,12 +1181,13 @@ function saveLead(){
 // EXPORT CSV
 // ─────────────────────────────────────────────
 function exportCSV(){
+  var toExport=getFiltered();
   var headers=["Nombre","Apellido","Email","Telefono","Propiedad","Etapa","Fecha","Notas"];
   var allQs=[];
-  leads.forEach(function(l){Object.keys(l.resp||{}).forEach(function(q){if(allQs.indexOf(q)<0)allQs.push(q);});});
+  toExport.forEach(function(l){Object.keys(l.resp||{}).forEach(function(q){if(allQs.indexOf(q)<0)allQs.push(q);});});
   var allH=headers.concat(allQs);
   function esc(v){return '"'+String(v==null?"":v).replace(/"/g,'""')+'"';}
-  var rows=leads.map(function(l){
+  var rows=toExport.map(function(l){
     var note=(l.notas||"").replace(/\n/g," ");
     var base=[l.nombre,l.apellido,l.email,l.tel,l.propiedad||"",l.stage,l.fecha,note];
     return base.concat(allQs.map(function(q){return (l.resp&&l.resp[q])||"";})).map(esc).join(",");
@@ -1264,6 +1275,45 @@ function renderDashboard(){
         }).join("")+
       '</div>'+
     '</div>';
+}
+
+// ─────────────────────────────────────────────
+// EQUIPO (solo gerente): cómo viene cada asesor
+// ─────────────────────────────────────────────
+function renderEquipo(){
+  var el=document.getElementById('equipo-content');
+  if(!el) return;
+  var asesores=agencyMembers.filter(function(m){return m.role==="asesor";});
+  if(!asesores.length){
+    el.innerHTML='<div style="font-family:Poppins,sans-serif;font-size:11px;color:rgba(255,255,255,.3)">Todavía no hay asesores cargados.</div>';
+    return;
+  }
+  var s3=stages[3]||{name:""};
+  el.innerHTML='<div class="dash-kpis" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">'+
+    asesores.map(function(m){
+      var mine=leads.filter(function(l){return l.assigned_to===m.id;});
+      var nFrio=mine.filter(isFrio).length;
+      var nVencido=mine.filter(isVencido).length;
+      var nCerrado=mine.filter(function(l){return l.stage===s3.name;}).length;
+      var lastAct=mine.reduce(function(max,l){
+        if(!l.updated_at) return max;
+        var d=new Date(l.updated_at);
+        return (!max||d>max)?d:max;
+      },null);
+      var lastActTxt=lastAct?Math.floor((Date.now()-lastAct.getTime())/86400000)+' días atrás':'sin actividad';
+      var nameParts=(m.nombre||"?").trim().split(/\s+/);
+      var ini=((nameParts[0]||"?")[0]+(nameParts[1]?nameParts[1][0]:"")).toUpperCase();
+      return '<div class="kpi-card" style="cursor:pointer" onclick="setViewScope(\''+m.id+'\');showView(\'leads\')">'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'+
+          '<div class="av" style="background:'+avColor(m.id)+'22;color:'+avColor(m.id)+'">'+ini+'</div>'+
+          '<div style="font-size:13px;font-weight:600;color:#fff">'+m.nombre+'</div>'+
+        '</div>'+
+        '<div class="kpi-num">'+mine.length+'</div><div class="kpi-lbl">Leads asignados</div>'+
+        '<div class="kpi-sub" style="margin-top:8px">'+nCerrado+' cerrados · '+nVencido+' vencidos · '+nFrio+' fríos</div>'+
+        '<div class="kpi-sub">Última actividad: '+lastActTxt+'</div>'+
+      '</div>';
+    }).join("")+
+  '</div>';
 }
 
 // ─────────────────────────────────────────────
@@ -1427,7 +1477,7 @@ function openCalSettings(){ showView('settings'); }
 // ─────────────────────────────────────────────
 // NAVIGATION
 // ─────────────────────────────────────────────
-var VIEWS=["dashboard","leads","calendar","webhook","settings"];
+var VIEWS=["dashboard","leads","calendar","webhook","settings","equipo"];
 function showView(v){
   VIEWS.forEach(function(x){
     var el=document.getElementById("view-"+x); if(el) el.style.display="none";
@@ -1438,6 +1488,8 @@ function showView(v){
   if(v==="dashboard") renderDashboard();
   if(v==="settings"){ renderStagesList(); var inp=document.getElementById("cal-url-inp"); if(inp) inp.value=calUrl; }
   if(v==="calendar") renderCalendar();
+  if(v==="leads") markLeadsSeen();
+  if(v==="equipo") renderEquipo();
 }
 
 // ─────────────────────────────────────────────
@@ -1504,6 +1556,8 @@ function showApp(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app-root').style.display='flex';
   renderViewScopeSelector();
+  var navEquipo=document.getElementById('nav-equipo');
+  if(navEquipo) navEquipo.style.display=(currentMember && currentMember.role==="gerente")?"flex":"none";
 }
 
 // Selector "Equipo / <asesor>" en la topbar, solo visible para gerente.
@@ -1564,35 +1618,86 @@ function doLogout(){
   showLogin();
 }
 
-// Any 401 from our API means the session expired or is invalid.
-function handleAuthResponse(r){
-  if(r.status===401){ clearSession(); showLogin(); return null; }
-  return r.json();
+// Renueva el access_token usando el refresh_token guardado, sin pedirle
+// nada al usuario. Devuelve true/false segun si se pudo renovar.
+function refreshSession(){
+  var s = getSession();
+  if(!s || !s.refresh_token) return Promise.resolve(false);
+  return fetch(SUPABASE_URL+'/auth/v1/token?grant_type=refresh_token',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
+    body:JSON.stringify({refresh_token:s.refresh_token})
+  }).then(function(r){return r.json();}).then(function(data){
+    if(data && data.access_token){
+      saveSession({access_token:data.access_token, refresh_token:data.refresh_token});
+      return true;
+    }
+    return false;
+  }).catch(function(){ return false; });
+}
+
+// Wrapper compartido para todas las llamadas a /api/leads: si la sesion
+// vencio (401), intenta renovarla sola una vez y reintenta el pedido
+// original antes de resignarse a mostrar el login de nuevo.
+function authFetch(url, opts){
+  opts = opts || {};
+  opts.headers = authHeaders();
+  return fetch(url, opts).then(function(r){
+    if(r.status!==401) return r.json().catch(function(){return null;});
+    return refreshSession().then(function(ok){
+      if(!ok){ clearSession(); showLogin(); return null; }
+      opts.headers = authHeaders();
+      return fetch(url, opts).then(function(r2){
+        if(r2.status===401){ clearSession(); showLogin(); return null; }
+        return r2.json().catch(function(){return null;});
+      });
+    });
+  });
 }
 
 function apiGet(){
-  return fetch(API_BASE,{headers:authHeaders()})
-    .then(handleAuthResponse)
-    .catch(function(){return null;});
+  return authFetch(API_BASE).catch(function(){return null;});
 }
 
 function apiPost(lead){
-  return fetch(API_BASE,{
-    method:'POST',
-    headers:authHeaders(),
-    body:JSON.stringify(lead)
-  }).then(handleAuthResponse);
+  return authFetch(API_BASE, {method:'POST', body:JSON.stringify(lead)});
 }
 
 function apiPatch(id, updates){
-  return fetch(API_BASE,{
-    method:'PATCH',
-    headers:authHeaders(),
-    body:JSON.stringify(Object.assign({id:id},updates))
-  }).then(handleAuthResponse);
+  return authFetch(API_BASE, {method:'PATCH', body:JSON.stringify(Object.assign({id:id},updates))});
 }
 
 // Load leads from Supabase
+function lastSeenKey(){
+  return 'sifer_last_seen_' + (currentMember ? currentMember.id : 'anon');
+}
+function getLastSeen(){
+  var v = localStorage.getItem(lastSeenKey());
+  return v ? new Date(v) : null;
+}
+function markLeadsSeen(){
+  localStorage.setItem(lastSeenKey(), new Date().toISOString());
+  updateNewLeadsBadge();
+}
+function updateNewLeadsBadge(){
+  var badge = document.getElementById('nc');
+  if(!badge) return;
+  var lastSeen = getLastSeen();
+  if(!lastSeen){
+    // primera vez que vemos a este usuario: arrancamos en 0, no mostramos
+    // todo el historico como "nuevo".
+    localStorage.setItem(lastSeenKey(), new Date().toISOString());
+    badge.style.display = 'none';
+    return;
+  }
+  var count = leads.filter(function(l){ return l.created_at && new Date(l.created_at) > lastSeen; }).length;
+  if(count > 0){
+    badge.textContent = count;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+}
 function loadLeads(){
   var spinner=document.getElementById('loading-indicator');
   if(spinner) spinner.style.display='flex';
@@ -1613,11 +1718,13 @@ function loadLeads(){
           resp: l.respuestas||{},
           assigned_to: l.assigned_to||null,
           proximo_contacto: l.proximo_contacto||null,
-          updated_at: l.updated_at||null
+          updated_at: l.updated_at||null,
+          created_at: l.created_at||null
         };
       });
     }
     renderAll();
+    updateNewLeadsBadge();
   }).catch(function(){
     if(spinner) spinner.style.display='none';
     renderAll();
